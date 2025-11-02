@@ -10,24 +10,22 @@ dotenv.config();
 
 const app = express();
 app.use(cors());
-// NO usar express.json() en esta ruta porque usamos FormData
 
-// Configurar almacenamiento temporal de imágenes
+// Multer para recibir archivos
 const upload = multer({ dest: "uploads/" });
 
-// Ruta para manejar el envío del formulario
+// Ruta para recibir el formulario con fotos
 app.post("/send", upload.array("images", 3), async (req, res) => {
   try {
+    console.log("=== NUEVA PETICIÓN RECIBIDA ===");
+
+    // Mostrar lo que llega
+    console.log("Body:", req.body);
+    console.log("Archivos:", req.files.map(f => f.originalname));
+
     const { name, comment } = req.body;
     const files = req.files || [];
 
-    // --- LOGS PARA DEPURACIÓN ---
-    console.log("=== NUEVA PETICIÓN ===");
-    console.log("Nombre:", name);
-    console.log("Comentario:", comment);
-    console.log("Archivos recibidos:", files.map(f => f.originalname));
-
-    // Construir cuerpo del mensaje en HTML
     const htmlContent = `
       <h2>Nuevo comentario recibido</h2>
       <p><strong>Nombre:</strong> ${name}</p>
@@ -42,11 +40,11 @@ app.post("/send", upload.array("images", 3), async (req, res) => {
     formData.append("subject", "Nuevo comentario con fotos");
     formData.append("html", htmlContent);
 
-    files.forEach((file) => {
+    files.forEach(file => {
       formData.append("attachments", fs.createReadStream(file.path), file.originalname);
     });
 
-    console.log("Preparando request a Resend con:", {
+    console.log("Enviando a Resend:", {
       to: process.env.EMAIL_TO,
       subject: "Nuevo comentario con fotos",
       attachmentsCount: files.length
@@ -55,9 +53,9 @@ app.post("/send", upload.array("images", 3), async (req, res) => {
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+        Authorization: `Bearer ${process.env.RESEND_API_KEY}`
       },
-      body: formData,
+      body: formData
     });
 
     const result = await response.json();
@@ -65,7 +63,7 @@ app.post("/send", upload.array("images", 3), async (req, res) => {
     // Limpiar archivos temporales
     files.forEach(file => fs.unlinkSync(file.path));
 
-    console.log("Resultado Resend:", result);
+    console.log("Respuesta de Resend:", result);
 
     if (response.ok) {
       res.json({ success: true, result });
@@ -79,7 +77,6 @@ app.post("/send", upload.array("images", 3), async (req, res) => {
   }
 });
 
-// Iniciar servidor
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);
