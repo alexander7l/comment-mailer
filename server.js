@@ -9,9 +9,7 @@ dotenv.config();
 
 const app = express();
 app.use(cors());
-
-// No parseamos JSON automáticamente para multer, pero al final sí necesitamos JSON para Resend
-app.use(express.json({ limit: '10mb' })); // límite grande para imágenes
+app.use(express.json({ limit: '10mb' }));
 
 // Configurar almacenamiento temporal de imágenes
 const upload = multer({ dest: "uploads/" });
@@ -26,7 +24,7 @@ app.post("/send", upload.array("images", 3), async (req, res) => {
     const { name, comment } = req.body;
     const files = req.files || [];
 
-    // Construir cuerpo del mensaje en HTML
+    // Cuerpo HTML del correo
     const htmlContent = `
       <h2>Nuevo comentario recibido</h2>
       <p><strong>Nombre:</strong> ${name}</p>
@@ -34,12 +32,12 @@ app.post("/send", upload.array("images", 3), async (req, res) => {
       <p>Imágenes adjuntas: ${files.length}</p>
     `;
 
-    // Convertir imágenes a Base64
+    // ✅ Convertir imágenes a base64 en el formato correcto para Resend
     const attachments = files.map(file => {
       const fileData = fs.readFileSync(file.path);
       return {
-        name: file.originalname,
-        data: fileData.toString("base64"),
+        filename: file.originalname,
+        content: fileData.toString("base64"), // 👈 campo correcto
       };
     });
 
@@ -57,7 +55,7 @@ app.post("/send", upload.array("images", 3), async (req, res) => {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        from: "Comment Form <no-reply@yourdomain.com>", 
+        from: "Comment Form <onboarding@resend.dev>", // 🟢 usa dominio de prueba de Resend
         to: process.env.EMAIL_TO,
         subject: "Nuevo comentario con fotos",
         html: htmlContent,
