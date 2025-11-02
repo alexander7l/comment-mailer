@@ -21,6 +21,12 @@ app.post("/send", upload.array("images", 3), async (req, res) => {
     const { name, comment } = req.body;
     const files = req.files || [];
 
+    // --- LOGS PARA DEPURACIÓN ---
+    console.log("=== NUEVA PETICIÓN ===");
+    console.log("Nombre:", name);
+    console.log("Comentario:", comment);
+    console.log("Archivos recibidos:", files.map(f => f.originalname));
+
     // Construir cuerpo del mensaje en HTML
     const htmlContent = `
       <h2>Nuevo comentario recibido</h2>
@@ -41,6 +47,13 @@ app.post("/send", upload.array("images", 3), async (req, res) => {
       formData.append("attachments", fs.createReadStream(file.path), file.originalname);
     });
 
+    // --- LOG ANTES DE ENVIAR A RESEND ---
+    console.log("Preparando request a Resend con:", {
+      to: process.env.EMAIL_TO,
+      subject: "Nuevo comentario con fotos",
+      attachmentsCount: files.length
+    });
+
     // Enviar correo usando la API de Resend
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -54,6 +67,9 @@ app.post("/send", upload.array("images", 3), async (req, res) => {
 
     // Limpiar archivos temporales
     files.forEach(file => fs.unlinkSync(file.path));
+
+    // --- LOG DE RESULTADO ---
+    console.log("Resultado Resend:", result);
 
     if (response.ok) {
       res.json({ success: true, result });
