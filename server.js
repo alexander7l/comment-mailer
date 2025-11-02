@@ -10,7 +10,7 @@ dotenv.config();
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+// NO usar express.json() en esta ruta porque usamos FormData
 
 // Configurar almacenamiento temporal de imágenes
 const upload = multer({ dest: "uploads/" });
@@ -42,19 +42,16 @@ app.post("/send", upload.array("images", 3), async (req, res) => {
     formData.append("subject", "Nuevo comentario con fotos");
     formData.append("html", htmlContent);
 
-    // Adjuntar imágenes
     files.forEach((file) => {
       formData.append("attachments", fs.createReadStream(file.path), file.originalname);
     });
 
-    // --- LOG ANTES DE ENVIAR A RESEND ---
     console.log("Preparando request a Resend con:", {
       to: process.env.EMAIL_TO,
       subject: "Nuevo comentario con fotos",
       attachmentsCount: files.length
     });
 
-    // Enviar correo usando la API de Resend
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
@@ -68,7 +65,6 @@ app.post("/send", upload.array("images", 3), async (req, res) => {
     // Limpiar archivos temporales
     files.forEach(file => fs.unlinkSync(file.path));
 
-    // --- LOG DE RESULTADO ---
     console.log("Resultado Resend:", result);
 
     if (response.ok) {
@@ -76,6 +72,7 @@ app.post("/send", upload.array("images", 3), async (req, res) => {
     } else {
       res.status(500).json({ success: false, result });
     }
+
   } catch (err) {
     console.error("Error al enviar:", err);
     res.status(500).json({ success: false, error: err.message });
