@@ -3,7 +3,6 @@ import multer from "multer";
 import cors from "cors";
 import dotenv from "dotenv";
 import fs from "fs";
-import FormData from "form-data";
 import fetch from "node-fetch";
 
 dotenv.config();
@@ -11,21 +10,23 @@ dotenv.config();
 const app = express();
 app.use(cors());
 
-// Multer para recibir archivos
+// No parseamos JSON automáticamente para multer, pero al final sí necesitamos JSON para Resend
+app.use(express.json({ limit: '10mb' })); // límite grande para imágenes
+
+// Configurar almacenamiento temporal de imágenes
 const upload = multer({ dest: "uploads/" });
 
-// Ruta para recibir el formulario con fotos
+// Ruta para manejar el envío del formulario
 app.post("/send", upload.array("images", 3), async (req, res) => {
   try {
     console.log("=== NUEVA PETICIÓN RECIBIDA ===");
-
-    // Mostrar lo que llega
     console.log("Body:", req.body);
     console.log("Archivos:", req.files.map(f => f.originalname));
 
     const { name, comment } = req.body;
     const files = req.files || [];
 
+    // Construir cuerpo del mensaje en HTML
     const htmlContent = `
       <h2>Nuevo comentario recibido</h2>
       <p><strong>Nombre:</strong> ${name}</p>
@@ -33,29 +34,35 @@ app.post("/send", upload.array("images", 3), async (req, res) => {
       <p>Imágenes adjuntas: ${files.length}</p>
     `;
 
-    // Preparar FormData para enviar a Resend
-    const formData = new FormData();
-    formData.append("from", "Comment Form <no-reply@yourdomain.com>");
-    formData.append("to", process.env.EMAIL_TO);
-    formData.append("subject", "Nuevo comentario con fotos");
-    formData.append("html", htmlContent);
-
-    files.forEach(file => {
-      formData.append("attachments", fs.createReadStream(file.path), file.originalname);
+    // Convertir imágenes a Base64
+    const attachments = files.map(file => {
+      const fileData = fs.readFileSync(file.path);
+      return {
+        name: file.originalname,
+        data: fileData.toString("base64"),
+      };
     });
 
     console.log("Enviando a Resend:", {
       to: process.env.EMAIL_TO,
       subject: "Nuevo comentario con fotos",
-      attachmentsCount: files.length
+      attachmentsCount: attachments.length
     });
 
+    // Enviar correo usando la API de Resend
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${process.env.RESEND_API_KEY}`
+        "Authorization": `Bearer ${process.env.RESEND_API_KEY}`,
+        "Content-Type": "application/json"
       },
-      body: formData
+      body: JSON.stringify({
+        from: "Comment Form <no-reply@yourdomain.com>", 
+        to: process.env.EMAIL_TO,
+        subject: "Nuevo comentario con fotos",
+        html: htmlContent,
+        attachments: attachments
+      })
     });
 
     const result = await response.json();
@@ -77,6 +84,7 @@ app.post("/send", upload.array("images", 3), async (req, res) => {
   }
 });
 
+// Iniciar servidor
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);
